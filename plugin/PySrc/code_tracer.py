@@ -8,12 +8,14 @@ from ast import (fix_missing_locations, iter_fields, parse, Add, Assign, AST,
 from contextlib import contextmanager
 from copy import deepcopy
 import imp
+import importlib
+import io
+import matplotlib.pyplot as plt
+import os
 from pydoc import locate
 import sys
 import traceback
 import types
-import os
-import importlib
 
 from canvas import Canvas
 from mock_turtle import MockTurtle
@@ -1004,6 +1006,11 @@ def main():
         print('\n'.join(turtle_report))
         print('end_canvas')
         print('.')
+
+    image = io.BytesIO()
+    plt.savefig(image, format='png')
+    sys.stderr.buffer.write(image.getvalue())
+
     print(code_report)
     if tracer.return_code:
         exit(tracer.return_code)

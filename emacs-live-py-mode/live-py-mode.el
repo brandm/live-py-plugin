@@ -26,6 +26,7 @@
 (defvar live-py-timer)
 (defvar live-py-output-buffer nil "The name of the output buffer.")
 (defvar live-py-output-window)
+(defvar live-py-image-buffer nil "The name of the image buffer.")
 (defvar live-py-driver)
 (defvar live-py-module)
 (defvar live-py-parent)
@@ -63,23 +64,34 @@
 					    (or live-py-path live-py-dir))))
          (process-environment (cons pythonpath process-environment))
          (default-directory live-py-dir)
-         (reused-buffer (buffer-live-p
+         (reused-output (buffer-live-p
                          (and live-py-output-buffer
-                              (get-buffer live-py-output-buffer)))))
+                              (get-buffer live-py-output-buffer))))
+         (reused-image (buffer-live-p
+                        (and live-py-image-buffer
+                             (get-buffer live-py-image-buffer)))))
+    (when reused-image
+      (with-current-buffer live-py-image-buffer
+        (image-toggle-display-text)
+        (erase-buffer)))
     (save-restriction
       (widen)
-      ;; Create (or recreate) if necessary, update and last but not least
-      ;; display output buffer.
+      ;; Create (or recreate) if necessary and update output and image
+      ;; buffer. Last but not least display output buffer.
       (if (eq 0
               (shell-command-on-region 1
                                        (1+ (buffer-size))
                                        command-line
-                                       live-py-output-buffer))
+                                       live-py-output-buffer
+                                       nil
+                                       live-py-image-buffer))
           (setq live-py-lighter " live")
         (setq live-py-lighter " live(FAIL)")))
     (with-current-buffer live-py-output-buffer
       (setq buffer-read-only 1)
-      (unless reused-buffer (toggle-truncate-lines 1)))
+      (unless reused-output (toggle-truncate-lines 1)))
+    (with-current-buffer live-py-image-buffer
+      (if reused-image (image-toggle-display-image) (image-mode)))
     (live-py-synchronize-scroll
      (line-number-at-pos (window-start)) (line-number-at-pos))
     (set 'live-py-timer nil)))
@@ -228,12 +240,17 @@ With arg, turn mode on if and only if arg is positive.
    ;; Turning the mode ON.
    (live-py-mode
     ;; create a unique name for the trace output buffer
-    (set (make-local-variable 'live-py-output-buffer)
-         (concat "*live-py-output_"
-                 (file-name-nondirectory (buffer-file-name))
-                 "_"
-                 (make-temp-name "")
-                 "*"))
+    (mapc (lambda (buffer-and-infix)
+            (set (make-local-variable (car buffer-and-infix))
+                 (concat "*live-py-"
+                         (cadr buffer-and-infix)
+                         "_"
+                         (file-name-nondirectory (buffer-file-name))
+                         "_"
+                         (make-temp-name "")
+                         "*")))
+            '((live-py-output-buffer "output")
+              (live-py-image-buffer "image")))
     (set (make-local-variable 'live-py-timer) nil)
     (set (make-local-variable 'live-py-driver) nil)
     (set (make-local-variable 'live-py-module) (file-name-base buffer-file-name))
@@ -253,6 +270,7 @@ With arg, turn mode on if and only if arg is positive.
     (remove-hook 'post-command-hook 'live-py-check-to-scroll t)
     (remove-hook 'kill-buffer-hook 'live-py-mode-off t)
     (ignore-errors (kill-buffer live-py-output-buffer))
+    (ignore-errors (kill-buffer live-py-image-buffer))
     (when (window-valid-p live-py-output-window)
       (delete-window live-py-output-window))
     (toggle-truncate-lines 0))))
